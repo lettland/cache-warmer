@@ -1,4 +1,4 @@
-name: Nightly Release Management
+name: Nightly Release
 
 on:
     push:
@@ -10,9 +10,9 @@ jobs:
         runs-on: ubuntu-24.04
         steps:
             - name: Checkout code
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
 
-            - name: Manage Nightly Release
+            - name: Nightly Release
               env:
                   GH_TOKEN: ${{ secrets.GH_TOKEN }}
               run: |
@@ -38,4 +38,4 @@ jobs:
                   sleep 5
                   
                   # Create a new nightly release, explicitly targeting the latest commit
-                  gh release create nightly --notes "Nightly build based on master branch" --title "nightly" --target $LATEST_COMMIT --prerelease
+                  gh release create nightly --notes "latest master branch build" --title "nightly" --target $LATEST_COMMIT --prerelease
