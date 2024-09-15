@@ -15,7 +15,7 @@ import (
 const (
 	versionOption       = "--version"
 	cacheWarmupArgument = "cache:warmup"
-	cacheClearArgument  = "cache:clear"
+	cacheClearArgument  = "cache:clear --no-warmup"
 	cachePoolArgument   = "cache:pool:clear"
 )
 
@@ -26,7 +26,7 @@ const (
 // It then checks if the console file exists at that path and returns an error if it does not.
 // Otherwise, it returns nil.
 func CheckSymfonyConsole(config structs.Config) error {
-	consoleFullPath := filepath.Join(config.SymfonyProjectDir, config.SymfonyConsolePath)
+	consoleFullPath := filepath.Join(config.DirSymfonyProject, config.SymfonyConsolePath)
 	if _, err := os.Stat(consoleFullPath); os.IsNotExist(err) {
 		return fmt.Errorf("symfony console not found at %s", consoleFullPath)
 	}
@@ -43,14 +43,14 @@ func CheckSymfonyConsole(config structs.Config) error {
 // The return value is the output of the command as a string and any error encountered during execution.
 func RunCommand(config structs.Config, mainArgumentOrOption string) (string, error) {
 	envOption := fmt.Sprintf("--env=%s", config.SymfonyEnv)
-	consoleFullPath := filepath.Join(config.SymfonyProjectDir, config.SymfonyConsolePath)
+	consoleFullPath := filepath.Join(config.DirSymfonyProject, config.SymfonyConsolePath)
 
 	args := []string{mainArgumentOrOption, envOption}
 	if !config.SymfonyDebug {
 		args = append(args, "--no-debug")
 	}
 
-	out, err := exec.Command(consoleFullPath, args...).CombinedOutput()
+	output, err := exec.Command(consoleFullPath, args...).CombinedOutput()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -60,7 +60,7 @@ func RunCommand(config structs.Config, mainArgumentOrOption string) (string, err
 		return "", fmt.Errorf("failed to execute Symfony command: %w", err)
 	}
 
-	return string(out), nil
+	return string(output), nil
 }
 
 // Version executes a Symfony console command with the provided configuration and the "--version" option.
@@ -112,7 +112,7 @@ func CacheWarmup(config structs.Config) (string, error) {
 // If the removal of the cache directory fails, an error is returned.
 // The function returns an error if any error occurs, otherwise it returns nil.
 func RemoveCache(config structs.Config) error {
-	projectDir := config.SymfonyProjectDir
+	projectDir := config.DirSymfonyProject
 	cacheDir := filepath.Join(projectDir, "var", "cache")
 
 	if !strings.HasPrefix(cacheDir, projectDir) {
@@ -158,4 +158,27 @@ func GetSymfonyProjectDir() (string, error) {
 	}
 
 	return path, nil
+}
+
+func EnsureDir(dirName string) error {
+	err := os.Mkdir(dirName, os.ModePerm)
+	if err == nil {
+		return nil
+	}
+
+	if os.IsExist(err) {
+		// check that the existing path is a directory
+		info, err := os.Stat(dirName)
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			return errors.New("path exists but is not a directory")
+		}
+
+		return nil
+	}
+
+	return err
 }
