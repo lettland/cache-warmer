@@ -3,35 +3,36 @@ help: ## Outputs this help screen
 	@grep -E '(^[a-zA-Z0-9_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
 ## —— Project ———————————————————————————————————————————————————————————————
-run: ## Run the main go file on a Symfony project
-	go run vcw.go $(path)
-
 VERSION := $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+PROJECT_NAME := cache-warmer
 
-build: ## Build the vcw executable for the current platform
+run: ## Run the main go file on a Symfony project
+	go run $(PROJECT_NAME).go $(path)
+
+build: ## Build the vcw executable for the Linux/macOS
 	${MAKE} lint
-	go build -ldflags="-X main.version=$(VERSION) -s -w" -o vcw
-	strip vcw
-	shasum -a 256 vcw
+	go build -ldflags="-X main.version=$(VERSION) -s -w" -o $(PROJECT_NAME)
+	strip $(PROJECT_NAME)
+	shasum -a 256 $(PROJECT_NAME)
 
-build-win: ## Build the vcw executable for the current platform
-	go build -ldflags="-X main.version=$(VERSION) -s -w" -o vcw.exe
-	shasum -a 256 vcw.exe
+build-win: ## Build the vcw executable for Windows
+	go build -ldflags="-X main.version=$(VERSION) -s -w" -o $(PROJECT_NAME).exe
+	shasum -a 256 $(PROJECT_NAME).exe
 
-clean: ## Clean all executable
-	rm -f vcw vcw.exe
+clean: ## Clean all executables
+	rm -f $(PROJECT_NAME) $(PROJECT_NAME).exe
 
-deps: clean ## Clean deps
-	go mod tidy
+deps: clean ## Clean dependencies
+	go mod tidy -e
 	go get -d -v ./...
 
-update: ## Update dependecies
+update: ## Update dependencies
 	go get -u ./...
 
 ## —— Tests ✅ —————————————————————————————————————————————————————————————————
 test: ## Run all tests
-	go test -count=1 -v ./...
+	go test -count=1 -v ./... -coverprofile cover.out
 
 ## —— Coding standards ✨ ——————————————————————————————————————————————————————
-lint: ## Run gofmt simplify and lint
+lint: ## Run gofmt, simplify and lint
 	gofmt -s -l -w .

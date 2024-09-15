@@ -4,6 +4,9 @@ on:
     release:
         types: [published]
 
+env:
+    app_name: cache-warmer
+
 jobs:
     build:
         strategy:
@@ -55,43 +58,43 @@ jobs:
               run: |
                   GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
                   go build -ldflags="-X main.version=${{ env.VERSION }} -s -w" \
-                  -o vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}
+                  -o ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}
               shell: bash
 
             - name: Strip binary (Linux AMD64)
               if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
               run: |
-                  strip vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
+                  strip ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
               shell: bash
 
             - name: Strip binary (Linux ARM64)
               if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
               run: |
                   sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
-                  aarch64-linux-gnu-strip vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
+                  aarch64-linux-gnu-strip ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
               shell: bash
 
             - name: Calculate SHA-256 checksum and create checksum file (Linux and macOS)
               if: matrix.goos != 'windows'
               run: |
-                  shasum -a 256 vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }} > vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
+                  shasum -a 256 ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }} > ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
               shell: bash
 
             - name: Calculate SHA-256 checksum and create checksum file (Windows)
               if: matrix.goos == 'windows'
               run: |
-                  certutil -hashfile vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }} SHA256 > vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
-                  $lines = Get-Content vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
-                  $lines[1..$($lines.Length-1)] | Set-Content vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
+                  certutil -hashfile ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }} SHA256 > ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
+                  $lines = Get-Content ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
+                  $lines[1..$($lines.Length-1)] | Set-Content ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
               shell: pwsh
 
             - name: Upload binary and checksum file as artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
+                  name: ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
                   path: |
-                      vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}
-                      vcw-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
+                      ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}
+                      ${{ env.app_name }}-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ env.EXT }}.sha256
 
     release:
         needs: build
