@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -14,51 +13,13 @@ import (
 
 	"github.com/vairogs/cache-warmer/structs"
 	"github.com/vairogs/cache-warmer/symfony"
-	"github.com/vairogs/cache-warmer/tools"
 )
 
 var version = "nightly"
 
 const (
-	acronym = "CacheWarmer"
-	//binary     = "vcw"
 	repository = "https://github.com/vairogs/cache-warmer"
 )
-
-// Help prints the instructions on how to use the `VCW` command line tool. It provides examples of how to call the command, including the required argument for the path of the Symfony project. It also suggests adding the command to the system's `$PATH` if it has not been done already.
-func Help() {
-	binary := filepath.Base(os.Args[0])
-	binary = strings.TrimSuffix(binary, filepath.Ext(binary))
-
-	fmt.Println(fmt.Sprintf("Call %s with the path of your Symfony project as the first argument.", color.New(color.FgGreen).Sprintf("%s", binary)))
-	fmt.Println(fmt.Sprintf("Example: \"%s %s\"", color.New(color.FgGreen).Sprintf("%s", binary), color.New(color.FgHiYellow).Sprintf(".")))
-	fmt.Println(fmt.Sprintf("Or even: \"bin/%s %s\" if you call it from the bin of your Symfony project directory.", color.New(color.FgGreen).Sprintf("%s", binary), color.New(color.FgHiYellow).Sprintf(".")))
-}
-
-// Welcome prints a welcome message to the console.
-// It retrieves the version and generates a clickable version link.
-// The message includes the acronym, version, and author's website.
-// It also provides a brief description of the functionality of the program.
-func Welcome() {
-	versionURL := GenerateVersionLink(version)
-	clickableVersion := fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", versionURL, version)
-
-	var length = 80
-	fmt.Println(GenerateSeparator(length))
-	fmt.Println(fmt.Sprintf("  %s version %s by %s - https://me.k0d3r1s.com", color.New(color.Bold, color.FgGreen).Sprintf(acronym), color.New(color.FgHiYellow).Sprintf(clickableVersion), color.New(color.FgHiRed).Sprintf("k0d3r1s")))
-	fmt.Println(GenerateSeparator(length))
-	fmt.Println(fmt.Sprintf("%s watches your files and automatically refreshes your project cache.", color.New(color.FgGreen).Sprintf(acronym)))
-	fmt.Println(GenerateSeparator(length))
-}
-
-// ErrorNothingToWatch displays an error message indicating that no files to watch were found.
-func ErrorNothingToWatch() {
-	tools.PrintError(fmt.Errorf("no file to watch found"))
-	fmt.Println(fmt.Sprintf("%s If you are using an \"old\" Symfony project directory structure", color.New(color.FgHiYellow).Sprintf("[💡]")))
-	fmt.Println(fmt.Sprintf("     you have to customize the watched directories with a %s file", color.New(color.FgHiYellow).Sprintf(".cw.yaml")))
-	fmt.Println(fmt.Sprintf("     at the root of your Symfony project. Check out the doc: %s", color.New(color.FgMagenta).Sprintf("%s", repository)))
-	os.Exit(0)
-}
 
 // MainLoop continuously monitors for file changes and performs cache warming if an update is detected.
 // It takes a `config` parameter of type `structs.Config` which holds the configuration values for the application.
@@ -72,17 +33,44 @@ func MainLoop(config structs.Config, filesToWatch map[string]string) {
 		updatedFiles, _ := symfony.GetWatchMap(config)
 		if !reflect.DeepEqual(filesToWatch, updatedFiles) {
 			start := time.Now()
-			fmt.Println(fmt.Sprintf(" %s at %s > refreshing cache...", color.New(color.FgHiYellow).Sprintf("⬇ Update detected"), color.New(color.FgGreen).Sprintf(start.Format("15:04:05"))))
+			fmt.Println()
+			fmt.Println(fmt.Sprintf(" > %s at %s > refreshing cache", color.New(color.FgHiYellow).Sprintf("⬇ Update detected"), color.New(color.FgGreen).Sprintf(start.Format("15:04:05"))))
 			_, _ = symfony.CacheWarmup(config)
 			end := time.Now()
 			elapsed := end.Sub(start)
-			fmt.Println(fmt.Sprintf("  %s in %s second(s).", color.New(color.FgGreen).Sprintf("✅  Done!"), color.New(color.FgHiYellow).Sprintf("%.2f", elapsed.Seconds())))
+			fmt.Println(fmt.Sprintf(" > %s in %s", color.New(color.FgGreen).Sprintf("✅ Done"), color.New(color.FgHiYellow).Sprintf("%s", FormatDuration(elapsed.Milliseconds()))))
 			filesToWatch = updatedFiles
-			fmt.Println(fmt.Sprintf(" > %s file(s) watched in %s", color.YellowString("%d", len(filesToWatch)), color.YellowString("%s", config.SymfonyProjectDir)))
+			fmt.Println(fmt.Sprintf(" > %s file(s) watched at %s", color.YellowString("%d", len(filesToWatch)), color.YellowString("%s", config.DirSymfonyProject)))
 		} else {
 			time.Sleep(config.SleepTime)
 		}
 	}
+}
+
+func FormatDuration(ms int64) string {
+	const (
+		msInSecond = 1000
+		msInMinute = 60000
+	)
+
+	minutes := ms / msInMinute
+	ms = ms % msInMinute
+	seconds := ms / msInSecond
+	ms = ms % msInSecond
+
+	var result []string
+
+	if minutes > 0 {
+		result = append(result, fmt.Sprintf("%d minute(s)", minutes))
+	}
+	if seconds > 0 {
+		result = append(result, fmt.Sprintf("%d second(s)", seconds))
+	}
+	if ms > 0 || len(result) == 0 {
+		result = append(result, fmt.Sprintf("%d millisecond(s)", ms))
+	}
+
+	return strings.Join(result, ", ")
 }
 
 // main is the entry point of the program. It initializes the configuration, displays a Welcome message,
@@ -94,24 +82,32 @@ func main() {
 	var err error
 	config.Init()
 
-	Welcome()
+	fmt.Println()
 
-	if len(os.Args) == 1 {
-		Help()
-		os.Exit(0)
-	}
-
-	vendors := flag.String("vendor", "", "comma-separated list of vendors to watch")
+	env := flag.String("env", "dev", "pass --env=env to the symfony console (default: dev)")
+	noDebug := flag.Bool("no-debug", false, "pass --no-debug to the symfony console (default: false)")
+	clearCache := flag.Bool("cache", false, "clear cache instead of just warmup (default: false)")
+	forceClearCache := flag.Bool("force", false, "force clear cache (rm -rf var/cache) (default: false)")
 	exclude := flag.String("exclude", "", "comma-separated directories not to watch")
-	clearCache := flag.Bool("cache", false, "clear cache instead of just warmup")
-	forceClearCache := flag.Bool("force", false, "force clear cache (rm -rf var/cache)")
-	noDebug := flag.Bool("no-debug", false, "force clear cache (rm -rf var/cache)")
-	env := flag.String("env", "dev", "comma-separated list of vendors to watch")
+	vendors := flag.String("vendor", "", "comma-separated list of vendors to watch")
 
 	pools := structs.NewCustomFlag()
 	flag.Var(pools, "pools", "comma-separated list of pools to clear")
 
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	flag.Parse()
+
+	if len(os.Args) < 2 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	clickableVersion := fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", GenerateVersionLink(version), version)
+	fmt.Println(fmt.Sprintf(" > Version: %s", color.New(color.FgHiYellow).Sprintf(clickableVersion)))
 
 	config.SymfonyEnv = *env
 	config.ClearCache = *clearCache
@@ -132,7 +128,7 @@ func main() {
 
 	if *exclude != "" {
 		excludeDirs := ParseCommaSeparated(*exclude)
-		config.ExcludeDirs = append(config.ExcludeDirs, excludeDirs...)
+		config.DirsExclude = append(config.DirsExclude, excludeDirs...)
 	}
 
 	if pools.IsChanged() {
@@ -144,20 +140,20 @@ func main() {
 		}
 	}
 
-	config.SymfonyProjectDir, err = symfony.GetSymfonyProjectDir()
+	config.DirSymfonyProject, err = symfony.GetSymfonyProjectDir()
 
 	if err != nil {
-		tools.PrintError(fmt.Errorf("project directory not found"))
-		tools.PrintError(err)
+		PrintError(fmt.Errorf("project directory not found"))
+		PrintError(err)
 		os.Exit(1)
 	}
 
-	fmt.Println(" > Project directory: " + color.New(color.FgGreen).Sprintf(config.SymfonyProjectDir))
+	fmt.Println(" > Project directory: " + color.New(color.FgGreen).Sprintf(config.DirSymfonyProject))
 
 	err = symfony.CheckSymfonyConsole(config)
 	if err != nil {
-		tools.PrintError(fmt.Errorf("symfony console not found"))
-		tools.PrintError(err)
+		PrintError(fmt.Errorf("symfony console not found"))
+		PrintError(err)
 		os.Exit(1)
 	}
 
@@ -165,8 +161,8 @@ func main() {
 
 	out, err := symfony.Version(config)
 	if err != nil {
-		tools.PrintError(fmt.Errorf("error while running the Symfony version command"))
-		tools.PrintError(err)
+		PrintError(fmt.Errorf("error while running the Symfony version command"))
+		PrintError(err)
 		os.Exit(1)
 	}
 
@@ -178,10 +174,11 @@ func main() {
 	elapsed := end.Sub(start)
 
 	if len(filesToWatch) == 0 {
-		ErrorNothingToWatch()
+		PrintError(fmt.Errorf("no file to watch found"))
+		os.Exit(0)
 	}
 
-	fmt.Println(fmt.Sprintf(" > %s file(s) watched in %s in %s millisecond(s).", color.YellowString("%d", len(filesToWatch)), color.YellowString("%s", config.SymfonyProjectDir), color.YellowString("%d", elapsed.Milliseconds())))
+	fmt.Println(fmt.Sprintf(" > %s file(s) watched at %s in %s", color.YellowString("%d", len(filesToWatch)), color.YellowString("%s", config.DirSymfonyProject), color.YellowString("%s", FormatDuration(elapsed.Milliseconds()))))
 	fmt.Println(fmt.Sprintf(" > %s to stop watching or run %s %s.", color.GreenString("CTRL+C"), color.GreenString("kill -9"), color.GreenString("%d", os.Getpid())))
 
 	MainLoop(config, filesToWatch)
@@ -205,9 +202,9 @@ func GenerateSeparator(length int) string {
 }
 
 // IsSemanticVersion checks if a given version string is in the semantic version format.
-func IsSemanticVersion(v string) bool {
+func IsSemanticVersion(version string) bool {
 	semVerPattern := `^v?\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$`
-	matched, _ := regexp.MatchString(semVerPattern, v)
+	matched, _ := regexp.MatchString(semVerPattern, version)
 
 	return matched
 }
@@ -216,10 +213,20 @@ func IsSemanticVersion(v string) bool {
 // If the version is a semantic version, it creates a link to the release tag on the repository.
 // If the version is not a semantic version, it creates a link to the commit on the repository.
 // It returns the generated link as a string.
-func GenerateVersionLink(ver string) string {
-	if IsSemanticVersion(ver) || "nightly" == ver {
-		return fmt.Sprintf("%s/releases/tag/%s", repository, ver)
+func GenerateVersionLink(version string) string {
+	if IsSemanticVersion(version) || "nightly" == version {
+		return fmt.Sprintf("%s/releases/tag/%s", repository, version)
 	}
 
-	return fmt.Sprintf("%s/commit/%s", repository, ver)
+	return fmt.Sprintf("%s/commit/%s", repository, version)
+}
+
+// PrintError prints an error message to the console. If the given error is nil, it does nothing.
+// Otherwise, it formats the error message with a red warning symbol and prints it in the console.
+func PrintError(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Println(fmt.Sprintf("%s %s /!\\", color.New(color.FgHiRed).Sprint("/!\\"), err))
 }

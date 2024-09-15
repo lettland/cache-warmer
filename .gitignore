@@ -1,2 +1,4 @@
-vcw
-vcw.exe
+cache-warmer
+!cache-warmer.go
+cache-warmer.exe
+cover.out

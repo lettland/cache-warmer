@@ -13,7 +13,7 @@ import (
 // FindFiles searches for files in the specified root directory and its subdirectories.
 // It excludes the specified directories and handles vendor directories based on the vendorWatch flag.
 // It returns a list of file paths and an error if any occurred.
-func FindFiles(root string, excludedDirs []string, vendorWatch bool, vendorList []string) ([]string, error) {
+func FindFiles(config structs.Config, root string, excludedDirs []string, vendorWatch bool, vendorList []string) ([]string, error) {
 	var files []string
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -21,33 +21,40 @@ func FindFiles(root string, excludedDirs []string, vendorWatch bool, vendorList 
 			return err
 		}
 
-		if d.IsDir() {
-			// Skip excluded directories
-			for _, excludedDir := range excludedDirs {
-				if strings.Contains(path, excludedDir) {
-					return filepath.SkipDir
-				}
-			}
-
-			// Handle vendor directory based on the vendorWatch flag
-			if strings.Contains(path, "vendor") && !vendorWatch {
+		// Skip excluded directories (not individual files)
+		for _, excludedDir := range excludedDirs {
+			if d.IsDir() && strings.Contains(path, excludedDir) {
 				return filepath.SkipDir
 			}
+		}
 
-			if vendorWatch {
-				insideVendor := false
-				for _, vendor := range vendorList {
-					if strings.HasPrefix(path, filepath.Join(root, vendor)) {
-						insideVendor = true
-						break
-					}
-				}
-				if !insideVendor {
+		// Handle the vendor directory based on vendorWatch
+		if d.IsDir() {
+			if strings.HasPrefix(path, filepath.Join(root, config.DirSymfonyVendor)) {
+				if !vendorWatch {
+					// If vendorWatch is false, skip the entire vendor directory
 					return filepath.SkipDir
+				}
+
+				// If vendorWatch is true, check if the current path matches any of the vendorList entries
+				if len(vendorList) > 0 {
+					insideVendor := false
+					for _, vendor := range vendorList {
+						if strings.HasPrefix(path, filepath.Join(root, config.DirSymfonyVendor, vendor)) {
+							insideVendor = true
+							break
+						}
+					}
+					if !insideVendor {
+						return filepath.SkipDir
+					}
 				}
 			}
 		} else {
-			files = append(files, path)
+			// Add the file if it's not excluded (like .gitignore)
+			if !strings.HasSuffix(path, ".gitignore") {
+				files = append(files, path)
+			}
 		}
 
 		return nil
@@ -70,6 +77,7 @@ func FindFiles(root string, excludedDirs []string, vendorWatch bool, vendorList 
 func GetWatchMap(config structs.Config) (map[string]string, error) {
 	watchMap := make(map[string]string)
 	filesToWatch, err := GetFilesToWatch(config)
+
 	if err != nil {
 		return nil, err
 	}
@@ -89,30 +97,36 @@ func GetFilesToWatch(config structs.Config) ([]string, error) {
 	var filesToWatch []string
 
 	// Set up excluded directories
-	var excludedDirs = config.ExcludeDirs
+	var excludedDirs = config.DirsExclude
 	if !config.VendorWatch {
-		excludedDirs = append(excludedDirs, "vendor")
+		excludedDirs = append(excludedDirs, config.DirSymfonyVendor)
 	}
 
 	// Include general files like .env*
-	generalFiles, err := GetFilesFromPath(config, ".env*")
+	envFiles, err := GetFilesFromPath(config, ".env*")
 	if err != nil {
 		return nil, err
 	}
-	filesToWatch = append(filesToWatch, generalFiles...)
+	filesToWatch = append(filesToWatch, envFiles...)
+
+	indexFile, err := GetSingleFileFromPath(config, "public/index.php")
+	if err != nil {
+		return nil, err
+	}
+	filesToWatch = append(filesToWatch, indexFile)
 
 	// Directories to watch
 	symfonyDirs := map[string]string{
-		config.SymfonyConfigDir:       "config",
-		config.SymfonySrcDir:          "src",
-		config.SymfonyTemplatesDir:    "templates",
-		config.SymfonyTranslationsDir: "translations",
-		config.MigrationsDir:          "migrations",
+		config.DirSymfonyConfig:       config.DirSymfonyConfig,
+		config.DirSymfonySrc:          config.DirSymfonySrc,
+		config.DirSymfonyTemplates:    config.DirSymfonyTemplates,
+		config.DirSymfonyTranslations: config.DirSymfonyTranslations,
+		config.DirMigrations:          config.DirMigrations,
 	}
 
 	// Watch all files in the specified directories, regardless of their extensions
 	for dir := range symfonyDirs {
-		files, err := FindFiles(dir, excludedDirs, config.VendorWatch, config.VendorList)
+		files, err := FindFiles(config, dir, excludedDirs, false, config.VendorList)
 		if err != nil {
 			return nil, err
 		}
@@ -122,8 +136,8 @@ func GetFilesToWatch(config structs.Config) ([]string, error) {
 	// If VendorWatch is enabled, watch specific vendor directories
 	if config.VendorWatch {
 		for _, vendor := range config.VendorList {
-			vendorPath := filepath.Join(config.SymfonyVendorDir, vendor)
-			vendorFiles, err := FindFiles(vendorPath, excludedDirs, true, config.VendorList)
+			vendorPath := filepath.Join(config.DirSymfonyVendor, vendor)
+			vendorFiles, err := FindFiles(config, vendorPath, excludedDirs, true, config.VendorList)
 			if err != nil {
 				return nil, err
 			}
@@ -140,10 +154,24 @@ func GetFilesToWatch(config structs.Config) ([]string, error) {
 // If an error occurs during the globbing process, the function returns an error.
 // Otherwise, it returns the list of files matching the pattern and nil error.
 func GetFilesFromPath(config structs.Config, glob string) ([]string, error) {
-	files, err := filepath.Glob(filepath.Join(config.SymfonyProjectDir, glob))
+	files, err := filepath.Glob(filepath.Join(config.DirSymfonyProject, glob))
 	if err != nil {
 		return nil, fmt.Errorf("error while globbing files: %v", err)
 	}
 
 	return files, nil
+}
+
+func GetSingleFileFromPath(config structs.Config, filePath string) (string, error) {
+	fullPath := filepath.Join(config.DirSymfonyProject, filePath)
+
+	// Check if the file exists
+	if _, err := os.Stat(fullPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("file not found: %s", fullPath)
+		}
+		return "", err
+	}
+
+	return fullPath, nil
 }
