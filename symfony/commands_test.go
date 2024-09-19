@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vairogs/cache-warmer/structs"
+	"github.com/lettland/cache-warmer/structs"
 )
 
 func TestCheckSymfonyConsole(t *testing.T) {

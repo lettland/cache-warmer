@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vairogs/cache-warmer/structs"
+	"github.com/lettland/cache-warmer/structs"
 )
 
 // FindFiles searches for files in the specified root directory and its subdirectories.

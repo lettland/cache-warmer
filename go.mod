@@ -1,4 +1,4 @@
-module github.com/vairogs/cache-warmer
+module github.com/lettland/cache-warmer
 
 go 1.21
 

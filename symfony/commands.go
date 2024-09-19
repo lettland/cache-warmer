@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vairogs/cache-warmer/structs"
+	"github.com/lettland/cache-warmer/structs"
 )
 
 const (

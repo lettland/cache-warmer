@@ -11,7 +11,7 @@ run: ## Run the main go file on a Symfony project
 
 build: ## Build the vcw executable for the Linux/macOS
 	${MAKE} lint
-	go build -ldflags="-X main.version=$(VERSION) -s -w" -o $(PROJECT_NAME)
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$(VERSION) -s -w" -o $(PROJECT_NAME)
 	strip $(PROJECT_NAME)
 	shasum -a 256 $(PROJECT_NAME)
 

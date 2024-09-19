@@ -11,14 +11,14 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/vairogs/cache-warmer/structs"
-	"github.com/vairogs/cache-warmer/symfony"
+	"github.com/lettland/cache-warmer/structs"
+	"github.com/lettland/cache-warmer/symfony"
 )
 
 var version = "nightly"
 
 const (
-	repository = "https://github.com/vairogs/cache-warmer"
+	repository = "https://github.com/lettland/cache-warmer"
 )
 
 // MainLoop continuously monitors for file changes and performs cache warming if an update is detected.
@@ -34,13 +34,14 @@ func MainLoop(config structs.Config, filesToWatch map[string]string) {
 		if !reflect.DeepEqual(filesToWatch, updatedFiles) {
 			start := time.Now()
 			fmt.Println()
-			fmt.Println(fmt.Sprintf(" > %s at %s > refreshing cache", color.New(color.FgHiYellow).Sprintf("⬇ Update detected"), color.New(color.FgGreen).Sprintf(start.Format("15:04:05"))))
+			fmt.Println(fmt.Sprintf(" > %s at %s > refreshing cache", color.New(color.FgHiYellow).Sprintf("Update detected"), color.New(color.FgGreen).Sprintf(start.Format("15:04:05"))))
 			_, _ = symfony.CacheWarmup(config)
 			end := time.Now()
 			elapsed := end.Sub(start)
-			fmt.Println(fmt.Sprintf(" > %s in %s", color.New(color.FgGreen).Sprintf("✅ Done"), color.New(color.FgHiYellow).Sprintf("%s", FormatDuration(elapsed.Milliseconds()))))
+			fmt.Println(fmt.Sprintf(" > %s in %s", color.New(color.FgGreen).Sprintf("Done"), color.New(color.FgHiYellow).Sprintf("%s", FormatDuration(elapsed.Milliseconds()))))
 			filesToWatch = updatedFiles
 			fmt.Println(fmt.Sprintf(" > %s file(s) watched at %s", color.YellowString("%d", len(filesToWatch)), color.YellowString("%s", config.DirSymfonyProject)))
+			fmt.Println(fmt.Sprintf(" > %s to stop watching or run %s %s.", color.GreenString("CTRL+C"), color.GreenString("kill -9"), color.GreenString("%d", os.Getpid())))
 		} else {
 			time.Sleep(config.SleepTime)
 		}
